@@ -1,9 +1,98 @@
-<!-- In HTML Comments are written like this -->
-<!-- They can all be removed for your apps -->
-<!doctype html> <!-- This first line tells browsers to expect modern standard html 5 -->
-<html lang="en-gb"> <!-- This is indicates the page is written in British English, useful for accessibility -->
-<meta charset="utf-8"> <!-- This indicates how the file is encoded. utf-8 is standard -->
-<title>Your Web-app Title</title> <!-- All pages need a title, this will be displayed in the browser's title bar -->
-<link rel="stylesheet" href="default.css"> <!-- Import style sheet – default.css -->
-<link rel="icon" href="./assets/favicon.png"> <!-- Import 'Favorites Icon' – favicon.png -->
-<script type="module" src="main.js"></script> <!-- Load the main script. Must be type="module". Have only one of these -->
+<!doctype html>
+<html lang="en-gb">
+<meta charset="utf-8">
+<title>Qawale</title>
+<link rel="stylesheet" href="default.css">
+<link rel="icon" href="./assets/icon.png">
+<script type="module" src="main.js"></script>
+
+<header class="site_header">
+    <h1>Qawale</h1>
+    <p id="phase_status" aria-live="polite">Player 1: select a stack.</p>
+</header>
+
+<main class="game_layout">
+    <section class="status_panel" aria-labelledby="turn_status">
+        <h2 id="turn_status">Player 1</h2>
+        <p id="feedback" aria-live="polite"></p>
+
+        <div class="reserve_row" aria-label="Player reserves">
+            <div class="reserve_card reserve_card--p1">
+                <span class="reserve_label">Player 1</span>
+                <strong id="p1_reserve">8</strong>
+            </div>
+            <div class="reserve_card reserve_card--p2">
+                <span class="reserve_label">Player 2</span>
+                <strong id="p2_reserve">8</strong>
+                <!-- both values for this reserve count and the other update in js dynamically -->
+            </div>
+        </div>
+    </section>
+
+    <section class="board_panel" aria-label="Game board area">
+            <div id="game_board" class="board" role="grid" aria-label="Qawale board"></div>
+    </section>
+
+    <section class="control_panel" aria-label="Controls and current move">
+        <button id="new_game" class="icon_button" type="button" aria-label="Start a new game">
+            <img src="./assets/reset.png" alt="" aria-hidden="true">
+            <span>Start new game</span>
+        </button>
+
+        <button id="open_guide" class="icon_button guide_button" type="button">
+            <span class="guide_icon" aria-hidden="true">?</span>
+            <span>Rules and tile guide</span>
+        </button>
+
+        <section id="moving_stack_panel" class="moving_stack_panel" aria-labelledby="moving_stack_title" hidden>
+            <h2 id="moving_stack_title">Moving stack</h2>
+            <div id="moving_stack" class="moving_stack" aria-live="polite"></div>
+        </section>
+    </section>
+</main>
+
+<!-- The instructions dialog screen that goes over the entire screen at the start or when button clicked-->
+<dialog id="guide_dialog" class="guide_dialog" aria-labelledby="guide_title">
+    <div class="guide_dialog_inner">
+        <header class="guide_dialog_header">
+            <h2 id="guide_title">Rules and tile guide</h2>
+            <button id="close_guide" class="small_close_button" type="button">
+                Close guide
+            </button>
+        </header>
+
+        <div class="guide_content">
+            <figure class="guide_full_screenshot">
+                <img src="./assets/board-guide.png" alt="Full Qawale interface guide showing the board, controls, reserves, and legal moves">
+                <figcaption>Full game guide of the UI.</figcaption>
+            </figure>
+
+            <div class="guide_lower_row">
+                <section class="guide_text">
+                    <h3>How to play</h3>
+                    <p>Select one of the highlighted legal cells in the grid</p>
+                    <p>Your stone is added to that stack, then you sow the stack one stone at a time across the board</p>
+                    <p>Choose highlighted orthogonal cells only, you can't move diagonally or immediately backwards to your last position</p>
+                    <p>Four visible top stones in a row, column, or diagonal wins!</p>
+                </section>
+
+                <figure class="guide_tile_screenshot">
+                    <img src="./assets/tile-guide.png" alt="Tile guide explaining top stone, stack height, and legal move marker">
+                    <figcaption>Tile guide: Legal move indicator, Top Stone, Stack contents and stack height</figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</dialog>
+
+<!--
+    The end state when a game ends is shown on a big banner, which also allows you to see the game tiles behidn it
+-->
+<dialog id="game_over_dialog" class="game_over_dialog" aria-labelledby="game_over_title">
+    <h2 id="game_over_title">Game over</h2>
+    <p id="game_over_message">Player 1 wins!</p>
+    <button id="dialog_new_game" class="icon_button icon_button--large" type="button">
+        <img src="./assets/reset.png" alt="" aria-hidden="true">
+        <span>Start again</span>
+    </button>
+</dialog>

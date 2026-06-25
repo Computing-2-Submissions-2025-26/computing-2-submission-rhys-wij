@@ -1,0 +1,553 @@
+import R from "./ramda.js";
+
+/**
+ * Qawale.js is the module to play 'Qawale' game
+ * @namespace Qawale
+ * @author Rhys Wijeratne
+ */
+
+
+const Qawale = Object.create(null);
+
+/**
+ * A stone is a coloured piece that is placed by the player on the grid
+ * 0 = neutral, 1 = player 1, 2 = player 2
+ * @memberof Qawale
+ * @typedef {(0 | 1 | 2)} Stone
+ */
+
+/**
+ * The stack of stones placed on a cell in the board
+ * stored from bottom to the top piece
+ * @memberof Qawale
+ * @typedef {Qawale.Stone[]} Stack
+ */
+
+/**
+ * THe board is a 4x4 grid of stacks (of stones)
+ * @memberof Qawale
+ * @typedef {Qawale.Stack[][]} Board
+ */
+
+/**
+ * Position on the board, stored at [column, row]
+ * @memberof Qawale
+ * @typedef {number[]} Position
+ */
+
+/**
+ * @memberof Qawale
+ * @typedef {Object} Move
+ * @property {Qawale.Position} source The stack orignally selected
+ * @property {Qawale.Position} current The current position of the moving stack
+ * @property {Qawale.Position | null} previous The previous position or null
+ * @property {Qawale.Stone[]} stones Stones still to be dropped (bottom first)
+ */
+
+/**
+ * The state of a Qawale game
+ * @memberof Qawale
+ * @typedef {Object} State
+ * @property {Qawale.Board} board The current board being played
+ * @property {(1 | 2)} player Which player's turn it is (selecting/sowing)
+ * @property {Object} reserves the number of stones each player has left
+ * @property {Qawale.Move | null} move The move currently being made
+ * @property {("selecting"|"sowing"|"ended")} phase The current part of the turn
+ */
+
+
+/**
+ * Return if a position is within board limits.
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.Position} position The position to test.
+ * @returns {boolean} Whether the position is on the board.
+ */
+Qawale.isOnBoard = function (position) {
+    return (
+        position[0] >= 0 &&
+        position[0] < BOARD_SIZE &&
+        position[1] >= 0 &&
+        position[1] < BOARD_SIZE
+    );
+};
+
+/**
+ * Return the stack at a chosen board position
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.Position} position The position to inspect
+ * @param {Qawale.State} state The current game state
+ * @returns {(Qawale.Stack | undefined)} The stack at that position
+ */
+Qawale.stackAt = function (position, state) {
+    if (!Qawale.isOnBoard(position)) {
+        return undefined;
+    }
+
+    return state.board[position[0]][position[1]];
+};
+
+/**
+ * Return the top stone at a board position
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.Position} position The position to inspect.
+ * @param {Qawale.State} state The current game state.
+ * @returns {(Qawale.Stone | undefined)} The top stone, or undefined.
+ */
+Qawale.topStoneAt = function (position, state) {
+    const stack = Qawale.stackAt(position, state);
+
+    if (stack === undefined || stack.length === 0) {
+        return undefined;
+    }
+
+    return stack[stack.length - 1];
+    //gets last position of stone
+};
+
+const stoneToString = function (stone) {
+    if (stone === 0) {
+        return "🟤";
+    }
+    if (stone === 1) {
+        return "🔵";
+    }
+    if (stone === 2) {
+        return "🔴";
+    }
+    return "?";
+};
+
+const stackToString = function (position, state) {
+    const stack = Qawale.stackAt(position, state);
+
+    if (stack.length === 0) {
+        return " · ";
+    }
+
+    return stoneToString(
+        Qawale.topStoneAt(position, state)
+    ) + String(stack.length);
+};
+
+const positionToString = function (position) {
+    if (position === null) {
+        return "none";
+    }
+    return "[" + String(position[0]) + ", " + String(position[1]) + "]";
+};
+
+const stonesToString = function (stones) {
+    if (stones.length === 0) {
+        return "none";
+    }
+    return stones.map(stoneToString).join(" ");
+};
+
+/**
+ * Return a text readable represnetation of the game state
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.State} state The game state to show
+ * @returns {string} A text representation of the full game state.
+ */
+Qawale.toString = function (state) {
+    const move = state.move;
+    const moveText = (
+        move === null
+        ? "none"
+        : [
+            "source: " + positionToString(move.source),
+            "current: " + positionToString(move.current),
+            "previous: " + positionToString(move.previous),
+            "stones: " + stonesToString(move.stones)
+        ].join("\n")
+    );
+
+    const boardText = [3, 2, 1, 0].map(function (row) {
+        return [0, 1, 2, 3].map(function (column) {
+            return stackToString([column, row], state);
+        }).join(" ");
+    }).join("\n");
+
+    return [
+        "Phase: " + state.phase,
+        "Player: " + String(state.player),
+        "Player 1 reserves: " + String(state.reserves["1"]),
+        "Player 2 reserves: " + String(state.reserves["2"]),
+        "Winner: " + String(Qawale.winner(state)),
+        "",
+        "Move:",
+        moveText,
+        "",
+        "Board:",
+        boardText
+    ].join("\n");
+};
+
+const BOARD_SIZE = 4;
+
+const emptyStack = function () {
+    return [];
+};
+
+//Create an empty board by looping BOARD SIZE X BOARD SIZE
+//  full of empty arrays (to make empty stacks)
+const emptyBoard = function () {
+    return R.range(0, BOARD_SIZE).map(function () {
+        return R.range(0, BOARD_SIZE).map(emptyStack);
+    });
+};
+
+//update the value of a stack on a cell of the board
+const setStack = function (position, newStack, board) {
+    const column = position[0];
+    const row = position[1];
+    //column = 0th number in array, row = 1st number in array
+    //R.update(index, value, array)
+    return R.update(column,
+            R.update(row, newStack, board[column]),
+        board
+    );
+};
+
+//add the starting corner pieces to the board
+
+const addStartingNeutrals = function (board) {
+    const cornerPositions = [[0, 0], [3, 0], [0, 3], [3, 3]];
+    const neutralStack = [0, 0];
+
+    return cornerPositions.reduce(function (currentBoard, position) {
+        return setStack(position, neutralStack, currentBoard);
+    }, board);
+};
+
+/**
+ * Create a new Qawale game state
+ * @memberof Qawale
+ * @function
+ * @returns {Qawale.State} The starting state
+ */
+
+
+Qawale.newGame = function() {
+    return{
+        "board": addStartingNeutrals(emptyBoard()),
+        "player": 1,
+        "reserves": {
+            "1" : 8,
+            "2" : 8
+        },
+        "phase" : "selecting",
+        "move" : null
+    };
+};
+
+//=========================MOVEMENTS===========================
+
+const otherPlayer = function (player) {
+    return 3 - player;
+};
+//switch to be the other players turn
+
+const positionsEqual = function (position1, position2) {
+    return (
+        position1[0] === position2[0] &&
+        position1[1] === position2[1]
+    );
+};
+
+const positionIsInList = function (position, positions) {
+    return positions.some(function (candidate) {
+        return positionsEqual(position, candidate);
+    });
+};
+
+const addPositions = function (position1, position2) {
+    return [
+        position1[0] + position2[0],
+        position1[1] + position2[1]
+    ];
+};
+
+const orthogonalDirections = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1]
+];
+
+const boardPositions = function () {
+    return R.range(0, BOARD_SIZE).reduce(function (positions, column) {
+        return positions.concat(
+            R.range(0, BOARD_SIZE).map(function (row) {
+                return [column, row];
+            })
+        );
+    }, []);
+};
+
+const removeStack = function (position, board) {
+    return setStack(position, [], board);
+};
+
+const placeStone = function (position, stone, board) {
+    const currentStack = board[position[0]][position[1]];
+    //stack before added stone
+
+    return setStack(
+        position,
+        currentStack.concat([stone]),
+        board
+    );
+    //just set the stack at that location to what it was and
+    //concatonate the new stone to the list
+};
+
+const legalSourcePositions = function (state) {
+    if (state.reserves[String(state.player)] <= 0) {
+        return [];
+    }
+    //if no reserves left then there are no legal source positions
+
+    return boardPositions().filter(function (position) {
+        return Qawale.stackAt(position, state).length > 0;
+    });
+    //the rest are legal as long as there is atleast one stone on there
+};
+
+const legalSowingPositions = function (state) {
+    const move = state.move;
+
+    if (move === null || move.stones.length === 0) {
+        return [];
+    }
+
+    return orthogonalDirections.map(function (direction) {
+        return addPositions(move.current, direction);
+    }).filter(function (position) {
+        return (
+            Qawale.isOnBoard(position) &&
+            (
+                move.previous === null ||
+                !positionsEqual(position, move.previous)
+            )
+        );
+    });
+};
+
+
+/**
+ * Return positions that the current player can legally choose next
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.State} state The current game state.
+ * @returns {Qawale.Position[]} Legal positions for the next click/choice.
+ */
+Qawale.legalChoices = function (state) {
+    if (state.phase === "ended") {
+        return [];
+    }
+
+    if (state.phase === "selecting") {
+        return legalSourcePositions(state);
+    }
+
+    return legalSowingPositions(state);
+};
+
+/**
+ * Return whether a position is a legal next choice.
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.Position} position The position to test.
+ * @param {Qawale.State} state The current game state.
+ * @returns {boolean} Whether the choice is legal.
+ */
+Qawale.isChoiceLegal = function (position, state) {
+    return positionIsInList(
+        position,
+        Qawale.legalChoices(state)
+    );
+};
+
+const startMove = function (position, state) {
+    const sourceStack = Qawale.stackAt(position, state);
+    //stack at the starting point
+
+    const movingStones = sourceStack.concat([state.player]);
+    //add on the stone of the player who's turn it is
+
+    const playerKey = String(state.player);
+    const nextReserves = {
+        "1": state.reserves["1"],
+        "2": state.reserves["2"]
+    };
+
+    nextReserves[playerKey] = nextReserves[playerKey] - 1;
+
+    return {
+        "board": removeStack(position, state.board),
+        //same board but having removed the stack
+        "player": state.player,
+        "reserves": nextReserves,
+        "phase": "sowing",
+        "move": {
+            "source": position,
+            "current": position,
+            "previous": null,
+            "stones": movingStones
+        }
+    };
+};
+
+const continueMove = function (position, state) {
+    const move = state.move;
+    const stoneToDrop = move.stones[0];
+    //stone at the bottom of the pile
+    const remainingStones = move.stones.slice(1);
+    //whole pile but the first one
+    const nextBoard = placeStone(position, stoneToDrop, state.board);
+
+
+    if (remainingStones.length === 0) {
+        const nextState = {
+            "board": nextBoard,
+            "player": otherPlayer(state.player),
+            "reserves": state.reserves,
+            "phase": "selecting",
+            "move": null
+        };
+
+        if (Qawale.winner(nextState) !== undefined) {
+            return {
+                "board" : nextState.board,
+                "player": nextState.player,
+                "reserves": nextState.reserves,
+                "phase": "ended",
+                "move" : null
+            };
+        }
+
+        return nextState;
+    }
+    //Switch to the other person's turn
+
+    return {
+        "board": nextBoard,
+        "player": state.player,
+        "reserves": state.reserves,
+        "phase": "sowing",
+        "move": {
+            "source": move.source,
+            "current": position,
+            "previous": move.current,
+            "stones": remainingStones
+        }
+    };
+    //continue with this persons move
+};
+
+/**
+ * Choose a position for the current step of the turn.
+ * If selecting, the position is the stack to lift.
+ * If sowing, the position is where the next stone is dropped.
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.Position} position The chosen position.
+ * @param {Qawale.State} state The current game state.
+ * @returns {(Qawale.State | undefined)} The next state,
+ * or undefined if illegal.
+ */
+Qawale.choosePosition = function (position, state) {
+    if (!Qawale.isChoiceLegal(position, state)) {
+        return undefined;
+    }
+
+    if (state.phase === "selecting") {
+        return startMove(position, state);
+    }
+
+    return continueMove(position, state);
+};
+
+
+//=======================WINNING LOGIC=========================
+
+//winning lines for each type of win
+const horizontalWinLines = [
+    [[0, 0], [1, 0], [2, 0], [3, 0]],
+    [[0, 1], [1, 1], [2, 1], [3, 1]],
+    [[0, 2], [1, 2], [2, 2], [3, 2]],
+    [[0, 3], [1, 3], [2, 3], [3, 3]]
+];
+
+const verticalWinLines = [
+    [[0, 0], [0, 1], [0, 2], [0, 3]],
+    [[1, 0], [1, 1], [1, 2], [1, 3]],
+    [[2, 0], [2, 1], [2, 2], [2, 3]],
+    [[3, 0], [3, 1], [3, 2], [3, 3]]
+];
+
+const diagonalWinLines = [
+    [[0, 0], [1, 1], [2, 2], [3, 3]],
+    [[0, 3], [1, 2], [2, 1], [3, 0]]
+];
+
+//Checks whether a certain top stone belongs to a player
+const topStoneIsPlayer = function (position, player, state) {
+    return Qawale.topStoneAt(position, state) === player;
+};
+
+//looks at 4 positions and checks if the same players stone is on top
+const playerHasLine = function(player, state,
+    position1, position2, position3, position4){
+    return (
+        topStoneIsPlayer(position1, player, state) &&
+        topStoneIsPlayer(position2, player, state) &&
+        topStoneIsPlayer(position3, player, state) &&
+        topStoneIsPlayer(position4, player, state)
+    );
+};
+
+const playerHasWin = function(player, state){
+    const horizontalWin = horizontalWinLines.some( function (line) {
+        return playerHasLine(player, state, ...line);
+    });
+
+    const verticalWin = verticalWinLines.some( function (line) {
+        return playerHasLine(player, state, ...line);
+    });
+
+    const diagonalWin = diagonalWinLines.some( function (line) {
+        return playerHasLine(player, state, ...line);
+    });
+
+    return (
+        (horizontalWin || verticalWin || diagonalWin)
+        ? true : false)
+}
+
+/**
+ * Return the winning player
+ * @memberof Qawale
+ * @function
+ * @param {Qawale.State} state The current game state
+ * @returns {(1|2| undefined)} The winning player, or undefined if nobody's won
+ */
+
+Qawale.winner = function(state) {
+    if (playerHasWin(1, state)) {
+        return 1;
+    }
+
+    if (playerHasWin(2, state)){
+        return 2;
+    }
+
+    return undefined;
+}
+
+export default Object.freeze(Qawale);
